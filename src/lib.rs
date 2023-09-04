@@ -1,14 +1,15 @@
 use crate::Backend::Redis;
-use async_trait::async_trait;
-use error::Result;
-use pallas_addresses::Address;
-use redis;
-use redis::Commands;
 use serde_aux::prelude::deserialize_number_from_string;
 
 use serde::Deserialize;
 
 pub mod error;
+pub mod last_block_info;
+pub mod utxos_by_address;
+
+pub use error::*;
+pub use last_block_info::LastBlockInfo;
+pub use utxos_by_address::UTxOsByAddress;
 
 pub enum Backend {
     Redis { ip: String, port: String },
@@ -71,31 +72,4 @@ impl Amount {
     pub fn unit(&self) -> &str {
         &self.unit
     }
-}
-
-#[async_trait]
-pub trait UTxOsByAddress {
-    async fn get_utxos_for_address(&self, address: &Address) -> Result<Vec<UTxO>>;
-}
-
-#[async_trait]
-impl UTxOsByAddress for ScrollsClient {
-    async fn get_utxos_for_address(&self, address: &Address) -> Result<Vec<UTxO>> {
-        match &self.backend {
-            Backend::Redis { ip, port } => redis_get_utxos_for_address(address, ip, port),
-        }
-    }
-}
-
-fn redis_get_utxos_for_address(address: &Address, ip: &str, port: &str) -> Result<Vec<UTxO>> {
-    let location = format!("redis://{ip}:{port}");
-    let client = redis::Client::open(location.as_ref()).unwrap();
-    let mut con = client.get_connection().unwrap();
-    let key = address.to_string();
-    let outputs_raw: Vec<String> = con.smembers(&key).unwrap();
-    let outputs = outputs_raw
-        .iter()
-        .map(|o| serde_json::from_str(o).unwrap())
-        .collect();
-    Ok(outputs)
 }
